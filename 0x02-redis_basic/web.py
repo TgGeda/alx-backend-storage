@@ -1,48 +1,34 @@
 #!/usr/bin/env python3
 """
-web cache and tracker
+Implements an expiring web cache and tracker
 """
-import requests
-import redis
+from typing import Callable
 from functools import wraps
+import redis
+import requests
+redis_client = redis.Redis()
 
-# Establish a connection to Redis
-redis_store = redis.Redis()
 
-def count_url_access(method):
-    """Decorator that counts how many times a URL is accessed and caches the result."""
-
+def url_count(method: Callable) -> Callable:
+    """counts how many times an url is accessed"""
     @wraps(method)
-    def wrapper(url):
-        # Generate the Redis keys for caching and counting
-        cached_key = "cached:" + url
-        count_key = "count:" + url
-
-        # Check if the URL's HTML content is already cached in Redis
-        cached_data = redis_store.get(cached_key)
-        if cached_data:
-            # If cached data exists, return it
-            return cached_data.decode("utf-8")
-
-        # If cached data doesn't exist, fetch the HTML content using the original method
-        html_content = method(url)
-
-        # Increment the count for the URL
-        redis_store.incr(count_key)
-
-        # Cache the HTML content in Redis with an expiration time of 10 seconds
-        redis_store.set(cached_key, html_content)
-        redis_store.expire(cached_key, 10)
-
-        # Return the HTML content
-        return html_content
-
+    def wrapper(*args, **kwargs):
+        url = args[0]
+        redis_client.incr(f"count:{url}")
+        cached = redis_client.get(f'{url}')
+        if cached:
+            return cached.decode('utf-8')
+        redis_client.setex(f'{url}, 10, {method(url)}')
+        return method(*args, **kwargs)
     return wrapper
 
 
-@count_url_access
+@url_count
 def get_page(url: str) -> str:
-    """Fetches the HTML content of a URL using an HTTP GET request."""
+    """get a page and cache value"""
     response = requests.get(url)
-    html_content = response.text
-    return html_content
+    return response.text
+
+
+if __name__ == "__main__":
+    get_page('http://slowwly.robertomurray.co.uk')
