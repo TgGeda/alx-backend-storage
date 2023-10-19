@@ -6,31 +6,43 @@ import requests
 import redis
 from functools import wraps
 
-store = redis.Redis()
-
+# Establish a connection to Redis
+redis_store = redis.Redis()
 
 def count_url_access(method):
-    """ Decorator counting how many times
-    a URL is accessed """
+    """Decorator that counts how many times a URL is accessed and caches the result."""
+
     @wraps(method)
     def wrapper(url):
+        # Generate the Redis keys for caching and counting
         cached_key = "cached:" + url
-        cached_data = store.get(cached_key)
+        count_key = "count:" + url
+
+        # Check if the URL's HTML content is already cached in Redis
+        cached_data = redis_store.get(cached_key)
         if cached_data:
+            # If cached data exists, return it
             return cached_data.decode("utf-8")
 
-        count_key = "count:" + url
-        html = method(url)
+        # If cached data doesn't exist, fetch the HTML content using the original method
+        html_content = method(url)
 
-        store.incr(count_key)
-        store.set(cached_key, html)
-        store.expire(cached_key, 10)
-        return html
+        # Increment the count for the URL
+        redis_store.incr(count_key)
+
+        # Cache the HTML content in Redis with an expiration time of 10 seconds
+        redis_store.set(cached_key, html_content)
+        redis_store.expire(cached_key, 10)
+
+        # Return the HTML content
+        return html_content
+
     return wrapper
 
 
 @count_url_access
 def get_page(url: str) -> str:
-    """ Returns HTML content of a url """
-    res = requests.get(url)
-    return res.text
+    """Fetches the HTML content of a URL using an HTTP GET request."""
+    response = requests.get(url)
+    html_content = response.text
+    return html_content
