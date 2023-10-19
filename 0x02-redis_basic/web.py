@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-web cache and tracker
+Web cache and tracker
 """
+
 import requests
 import redis
 from functools import wraps
@@ -10,13 +11,18 @@ from functools import wraps
 redis_store = redis.Redis()
 
 def count_url_access(method):
-    """Decorator that counts how many times a URL is accessed and caches the result."""
+    """
+    Decorator that counts how many times a URL is accessed and caches the result.
+    """
 
     @wraps(method)
-    def wrapper(url):
+    def wrapper(url: str) -> str:
+        """
+        Wrapper function that counts URL access, caches the result, and returns the HTML content.
+        """
         # Generate the Redis keys for caching and counting
-        cached_key = "cached:" + url
-        count_key = "count:" + url
+        cached_key = f"cached:{url}"
+        count_key = f"count:{url}"
 
         # Check if the URL's HTML content is already cached in Redis
         cached_data = redis_store.get(cached_key)
@@ -42,7 +48,9 @@ def count_url_access(method):
 
 @count_url_access
 def get_page(url: str) -> str:
-    """Fetches the HTML content of a URL using an HTTP GET request."""
+    """
+    Fetches the HTML content of a URL using an HTTP GET request.
+    """
     response = requests.get(url)
     html_content = response.text
     return html_content
